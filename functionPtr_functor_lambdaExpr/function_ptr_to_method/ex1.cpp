@@ -3,6 +3,7 @@
  * pointer to a non-static data members or methods must be dereferenced in the context of an object.
  * pointer to a static data member or static method can be dereferenced without an object.
  *
+ * Also see: https://stackoverflow.com/questions/6586205/what-are-the-pointer-to-member-operators-and-in-c
  */
 
 #include <iostream>
@@ -31,7 +32,8 @@ int main()
 
     //Another approach
     //using my_alias = int (A::*) () const;
-    //auto method_ptr { &A::getVal };
+    //my_alias method_ptr { &A::getVal };
+    //or auto method_ptr { &A::getVal };
 
     cout << "Dereferencing a method_ptr of in the context of object to obtain value: " 
          << (object.*method_ptr) () 
