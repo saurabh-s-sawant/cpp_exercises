@@ -136,20 +136,28 @@ struct NoTimeStamp
 
 struct WithCallable
 {
-    template<typename F, typename... Args>
-    static void call(std::string& duration, F&& func, Args&&... args)
+    template<typename F=std::function<void()>, typename... Args>
+    static void call(std::string& duration, F&& func={}, Args&&... args)
     {
-        auto start_time = std::chrono::high_resolution_clock::now();
+        if (std::function<void(Args...)>(func)) 
+        {
+            // func can be invoked
+            auto start_time = std::chrono::high_resolution_clock::now();
 
-        std::invoke(std::forward<F>(func), std::forward<Args>(args)...);
+            std::invoke(std::forward<F>(func), std::forward<Args>(args)...);
 
-        auto end_time = std::chrono::high_resolution_clock::now();
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>
+                                (end_time - start_time);
 
-        auto time_elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-        std::ostringstream oss;
-        oss << time_elapsed.count();
-        duration = " Time taken: " + oss.str() + " micro-sec.\n";
+            std::ostringstream oss;
+            oss << time_elapsed.count();
+            duration = " Time taken: " + oss.str() + " micro-sec.\n";
+        } else {
+            /* func is empty
+             * attempting to invoke func will result in std::bad_function_call
+             */
+        }
     }
 };
 
@@ -177,37 +185,32 @@ public:
     {
         StreamPolicy::operator()("\n" + TimePolicy::get_timestamp() + init_msg);
     }
-    void operator() (std::string msg)
-    {
-        StreamPolicy::operator()(TimePolicy::get_timestamp() + msg);
-    }
 
-    template <typename F, typename... Args>
-    void operator() (std::string msg, F&& func, Args&&... args) 
+    template <typename F=std::function<void()>, typename... Args>
+    void operator() (std::string msg, F&& func={}, Args&&... args) 
     {
-        std::string callable_duration;
+        std::string callable_duration= std::string{};
         
-        CallablePolicy::call(callable_duration, std::forward<F>(func), std::forward<Args>(args)...);
+        CallablePolicy::call(callable_duration, std::forward<F>(func), 
+                                                std::forward<Args>(args)...);
 
         StreamPolicy::operator()(TimePolicy::get_timestamp() + msg + callable_duration);
     }
 
+    //non-copyable, but movable
    ~MsgLogger() = default;
     MsgLogger(const MsgLogger& that) = delete;
     MsgLogger& operator=(const MsgLogger& that) = delete;
 
     MsgLogger(MsgLogger&& that) : 
-        StreamPolicy(std::move(that))
-    {}
+        StreamPolicy(std::move(that)) {}
 
     MsgLogger& operator=(MsgLogger&& that) noexcept
     {
         if(this == &that) return *this;
-
         StreamPolicy::operator=(std::move(that));
         return *this;
     }
-
 };
 
 
@@ -243,6 +246,7 @@ void log_matrix(LoggerType& logger, const std::vector<std::vector<MatrixType>>& 
     });
 }
 
+
 int main() 
 {
     MsgLogger logger{WriteToConsole(), "Hello, this is logger!"};
@@ -257,8 +261,7 @@ int main()
     MsgLogger<WriteToFile, WithMicroSecTimeStamp, WithCallable> callable_logger
     {WriteToFile("file.dat"), "Hello, I am callable_logger!"};
 
-    std::vector<std::complex<double>> complex_vec = {{1.0, 2.0}, {3.0, 4.0}, {5.0, 6.0}};
-
+    std::vector<std::complex<int>> complex_vec = {{1, 2}, {3, 4}, {5, 6}};
     log_vector(callable_logger, complex_vec);
 
     std::vector<std::vector<int>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
