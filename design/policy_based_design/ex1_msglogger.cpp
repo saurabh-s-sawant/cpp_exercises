@@ -1,11 +1,20 @@
-/* Example of Policy-based design pattern to create simple message logger.
- * Three policies: 
- * 1) StreamPolicy: option to write to console or a file.
- * 2) TimePolicy: option to show time stamp (e.g. in seconds or microseconds) during logging.
- * 3) CallablePolicy: option to invoke a callable for logging, 
- * e.g. user-defined lambda to log a matrix.
+/* Author: Saurabh S. Sawant
+ * Description: Example of policy-based design. 
  *
- * Defaults are WriteToConsole, NoTimeStamp, NoCallable.
+ * A message logger with three policies:
+ *   1) StreamPolicy: dictates where the log messages will be directed. Implementations:
+ *       - WriteToConsole: sends messages to the console. (default)
+ *       - WriteToFile: writes messages to a file (with support for thread safety).
+ *
+ *   2) StampPolicy: controls the formatting of prepended message stamps.
+ *       - NoStamp: opts for no stamp inclusion. (default)
+ *       - WithStamp_TimeSecPrecis: prepends a timestamp to each log message.
+ *       - WithStamp_TimeMicroSecPrecis: prepends a timestamp with microsecond precision.
+ *
+ *   3) CallablePolicy: determines whether a callable can be passed to the logger object.
+ *       - NoCallable: opts not to support a callable. (default)
+ *       - WithCallable: allows users to pass a user-defined callable such as a lambda function.
+ * See blog: https://saurabh-s-sawant.github.io/blog/2024/policyBasedDesign/
  */
 
 #include <iostream>
@@ -96,9 +105,9 @@ private:
 };
 
 
-struct WithTimeStamp
+struct WithStamp_TimeSecPrecis
 {
-    static std::string get_timestamp()
+    static std::string get_stamp()
     {
         auto timestamp = std::chrono::system_clock::now();
         auto time_now = std::chrono::system_clock::to_time_t(timestamp);
@@ -109,13 +118,14 @@ struct WithTimeStamp
     }
 };
 
-struct WithMicroSecTimeStamp
+struct WithStamp_TimeMicroSecPrecis
 {
-    static std::string get_timestamp()
+    static std::string get_stamp()
     {
         auto timestamp = std::chrono::high_resolution_clock::now();
         uint64_t micros_since_epoch = std::chrono::duration_cast<std::chrono::microseconds>(
                 timestamp.time_since_epoch()).count();
+
         auto microseconds = micros_since_epoch % 1000000;
         auto time_now = std::chrono::system_clock::to_time_t(timestamp);
 
@@ -126,11 +136,11 @@ struct WithMicroSecTimeStamp
     }
 };
 
-struct NoTimeStamp
+struct NoStamp
 {
-    static std::string get_timestamp()
+    static std::string get_stamp()
     {
-        return std::string();
+        return std::string{};
     }
 };
 
@@ -139,9 +149,12 @@ struct WithCallable
     template<typename F=std::function<void()>, typename... Args>
     static void call(std::string& duration, F&& func={}, Args&&... args)
     {
+        //convert func to std::function object and test
         if (std::function<void(Args...)>(func)) 
         {
-            // func can be invoked
+            /* func can be invoked.
+             * measure duration, output as string.
+             */
             auto start_time = std::chrono::high_resolution_clock::now();
 
             std::invoke(std::forward<F>(func), std::forward<Args>(args)...);
@@ -153,7 +166,8 @@ struct WithCallable
             std::ostringstream oss;
             oss << time_elapsed.count();
             duration = " Time taken: " + oss.str() + " micro-sec.\n";
-        } else {
+        } 
+        else {
             /* func is empty
              * attempting to invoke func will result in std::bad_function_call
              */
@@ -171,7 +185,7 @@ struct NoCallable
 
 
 template <typename StreamPolicy=WriteToConsole, 
-          typename TimePolicy=NoTimeStamp,
+          typename StampPolicy=NoStamp,
           typename CallablePolicy=NoCallable>
 class MsgLogger : private StreamPolicy
 {
@@ -179,29 +193,33 @@ public:
     /* Preference for r-value references.
      * l-value strings must be moved while passing as arguments.
      */
-    explicit MsgLogger(StreamPolicy&& stream_policy = StreamPolicy(),
-                       std::string&& init_msg = "") : 
+    explicit MsgLogger(std::string&& init_msg = "",
+                       StreamPolicy&& stream_policy = StreamPolicy()) :
     StreamPolicy(std::move(stream_policy))
     {
-        StreamPolicy::operator()("\n" + TimePolicy::get_timestamp() + init_msg);
+        StreamPolicy::operator()("\n" + StampPolicy::get_stamp() + init_msg);
     }
 
+    /*default F is an empty function */
     template <typename F=std::function<void()>, typename... Args>
     void operator() (std::string msg, F&& func={}, Args&&... args) 
     {
-        std::string callable_duration= std::string{};
+        std::string callable_duration= std::string{}; 
         
+        //forward callable signature and arguments
         CallablePolicy::call(callable_duration, std::forward<F>(func), 
                                                 std::forward<Args>(args)...);
 
-        StreamPolicy::operator()(TimePolicy::get_timestamp() + msg + callable_duration);
+        StreamPolicy::operator()(StampPolicy::get_stamp() + msg + callable_duration);
     }
 
-    //non-copyable, but movable
    ~MsgLogger() = default;
+
+    //non-copyable
     MsgLogger(const MsgLogger& that) = delete;
     MsgLogger& operator=(const MsgLogger& that) = delete;
 
+    //movable, let's say
     MsgLogger(MsgLogger&& that) : 
         StreamPolicy(std::move(that)) {}
 
@@ -249,22 +267,23 @@ void log_matrix(LoggerType& logger, const std::vector<std::vector<MatrixType>>& 
 
 int main() 
 {
-    MsgLogger logger{WriteToConsole(), "Hello, this is logger!"};
-    logger("logger is logging...");
+    //default logger
+    MsgLogger logger("Hello, this is default  logger!");
+    logger("default logger is logging...");
 
-    MsgLogger<WriteToConsole, WithMicroSecTimeStamp> micro_logger{WriteToConsole(), "Hello, this is micro_logger!"};
-    micro_logger("micro_logger is logging...");
-
-    MsgLogger<WriteToFile, WithMicroSecTimeStamp> file_logger{WriteToFile("file.dat"), "Hello, this is file_logger!"};
+    //file logger without callable
+    MsgLogger<WriteToFile, WithStamp_TimeMicroSecPrecis> 
+        file_logger{"Hello, this is file_logger!", WriteToFile("file.dat")};
     file_logger("file_logger is logging...");
 
-    MsgLogger<WriteToFile, WithMicroSecTimeStamp, WithCallable> callable_logger
-    {WriteToFile("file.dat"), "Hello, I am callable_logger!"};
+    //file logger with callable
+    MsgLogger<WriteToFile, WithStamp_TimeMicroSecPrecis, WithCallable> callable_logger
+    {"Hello, I am callable_logger!", WriteToFile("file.dat")};
 
     std::vector<std::complex<int>> complex_vec = {{1, 2}, {3, 4}, {5, 6}};
     log_vector(callable_logger, complex_vec);
 
-    std::vector<std::vector<int>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-    log_matrix(callable_logger, matrix);
+    //std::vector<std::vector<int>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    //log_matrix(callable_logger, matrix);
 
 }
