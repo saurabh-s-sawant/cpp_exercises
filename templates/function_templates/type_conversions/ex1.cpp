@@ -1,7 +1,7 @@
 /* Type conversions during type deduction
  * -automatic type conversions are limited
  * -when declaring call parameters by reference two arguments declared with template parameter T must match exactly.
- * -when declaring call parameters by value, only trivial conversions that delay are supported.
+ * -when declaring call parameters by value, only trivial conversions that decay are supported.
  *  -const and volatile are ignored
  *  -references convert to referenced type
  *  -raw arrays or functions convert to the corresponding pointer type
