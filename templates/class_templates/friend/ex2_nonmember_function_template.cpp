@@ -31,6 +31,7 @@ public:
         }    
     }
 
+    /* Approach 1 implementation */
     template<typename U>
         friend std::ostream& operator<< (std::ostream& strm, Stack<U> const& s);
 
@@ -56,11 +57,6 @@ Stack<T>::pop()
 template<typename T>
 std::ostream& operator<< (std::ostream& strm, Stack<T> const& s) 
 {
-/* This function is not a template function, 
- * but an ordinary function instantiated with class template if needed,
- * also known as template entity.
- * If we were to declare this, how to do that?--see two approaches in ex2, ex3.
- */
     s.Print(strm);
     return strm;
 }
