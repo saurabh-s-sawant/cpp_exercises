@@ -1,8 +1,8 @@
 /* How to declare a template entity--an ordinary function instantiated with the class template?
  * -Approach 1: implicitly declare a new function template as friend with a different template parameter
  * -Approach 2: 
- *  -forward declare a function template for the class (so forward declare template class as well)
- *  -inside the class, declare a specialization of nonmember function template as friend
+ *   - step 1: forward declare a function template for the class (so forward declare template class as well)
+ *   - step 2: inside the class, declare a specialization of nonmember function template as friend
  *
  *  Here Approach 2 is described.
  */
@@ -13,10 +13,11 @@
 
 using namespace std;
 
-/*forward declaration*/
+/* Approach2, step 1: forward declaration of the template class */
 template<typename T>
 class Stack;
 
+/* forward declaration of function template for the class */
 template<typename T>
 std::ostream& operator << (std::ostream& strm, Stack<T> const& s);
 
@@ -39,7 +40,8 @@ public:
         }    
     }
 
-    /* Declare a specialization of nonmember function template as a friend
+    /* Approach2, step 2: 
+     * Declare a specialization of nonmember function template as a friend
      * Note <T> after operator <<.
      * Without this <T>, we would have declared a new nontemplate function!
      */
